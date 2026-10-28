@@ -1,0 +1,158 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Mechanic Voice Entry</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 650px;
+      margin: 40px auto;
+      padding: 20px;
+      background: #f4f6f8;
+      color: #222;
+    }
+    main {
+      background: white;
+      padding: 24px;
+      border-radius: 12px;
+    }
+    button {
+      padding: 12px 16px;
+      margin: 6px 4px 6px 0;
+      border: 0;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 16px;
+    }
+    #start { background: #1769aa; color: white; }
+    #send { background: #237a45; color: white; }
+    #status { min-height: 24px; color: #555; }
+    textarea {
+      box-sizing: border-box;
+      width: 100%;
+      min-height: 220px;
+      padding: 12px;
+      font: inherit;
+      line-height: 1.5;
+    }
+  </style>
+</head>
+<body>
+<main>
+  <h1>Mechanic Voice Entry</h1>
+  <p>Tap Start Listening and describe the repair. Review the transcript before sending it to your repair form.</p>
+
+  <button id="start" type="button">🎙 Start Listening</button>
+  <button id="stop" type="button">Stop</button>
+
+  <p id="status" aria-live="polite">Ready.</p>
+
+  <label for="transcript"><strong>Recognized speech</strong></label>
+  <textarea id="transcript" placeholder="Your dictated repair notes will appear here. You can edit them before sending."></textarea>
+
+  <p>
+    <button id="send" type="button">Send to Repair Form</button>
+  </p>
+  <p id="sendStatus" aria-live="polite"></p>
+</main>
+
+<script>
+  const startButton = document.getElementById('start');
+  const stopButton = document.getElementById('stop');
+  const transcriptBox = document.getElementById('transcript');
+  const status = document.getElementById('status');
+  const sendStatus = document.getElementById('sendStatus');
+
+  const SpeechRecognition =
+    window.SpeechRecognition || window.webkitSpeechRecognition;
+
+  let recognition;
+  let listening = false;
+
+  if (SpeechRecognition) {
+    recognition = new SpeechRecognition();
+    recognition.lang = 'en-US';
+    recognition.continuous = true;
+    recognition.interimResults = true;
+
+    let finalText = '';
+
+    recognition.onstart = function () {
+      listening = true;
+      status.textContent = 'Listening. Describe the repair.';
+    };
+
+    recognition.onresult = function (event) {
+      let interimText = '';
+
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        const words = event.results[i][0].transcript;
+
+        if (event.results[i].isFinal) {
+          finalText += words + ' ';
+        } else {
+          interimText += words;
+        }
+      }
+
+      transcriptBox.value = finalText + interimText;
+    };
+
+    recognition.onerror = function (event) {
+      status.textContent =
+        'Voice error: ' + event.error +
+        '. Check microphone permission and try again.';
+    };
+
+    recognition.onend = function () {
+      listening = false;
+      status.textContent = 'Stopped. Review your transcript or start again.';
+    };
+  } else {
+    startButton.disabled = true;
+    status.textContent =
+      'Speech recognition is not supported in this browser. Try current Google Chrome.';
+  }
+
+  startButton.addEventListener('click', function () {
+    if (!recognition || listening) return;
+
+    try {
+      recognition.start();
+    } catch (error) {
+      status.textContent = 'Could not start. Please try again.';
+    }
+  });
+
+  stopButton.addEventListener('click', function () {
+    if (recognition && listening) recognition.stop();
+  });
+
+  document.getElementById('send').addEventListener('click', function () {
+    const text = transcriptBox.value.trim();
+
+    if (!text) {
+      sendStatus.textContent = 'Record or enter some notes first.';
+      return;
+    }
+
+    if (!window.opener || window.opener.closed) {
+      sendStatus.textContent =
+        'Your repair form is not connected. Open this page using the microphone button in your repair app.';
+      return;
+    }
+
+    window.opener.postMessage({
+      type: 'MECHANIC_TRANSCRIPT',
+      transcript: text
+    }, '*');
+
+    sendStatus.textContent =
+      'Transcript sent. Check your repair form before saving.';
+  });
+</script>
+</body>
+</html>
